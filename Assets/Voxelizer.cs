@@ -8,6 +8,8 @@ public class Voxelizer : MonoBehaviour
     [SerializeField] float voxelSize = 0.1f;
     [SerializeField] bool keepInside = true;
 
+    public Bounds debugBounds;
+
     Matrix4x4[][] voxelsMatrices;
     Mesh instanceMesh;
     Material defaultMaterial;
@@ -39,7 +41,7 @@ public class Voxelizer : MonoBehaviour
 
                 while (v < voxels.Length)
                 {
-                    voxelsMatrices[i1][i2] = transform.localToWorldMatrix * Matrix4x4.TRS(voxels[v], Quaternion.identity, Vector3.one * voxelSize);
+                    voxelsMatrices[i1][i2] = /* transform.localToWorldMatrix * */ Matrix4x4.TRS(voxels[v], Quaternion.identity, Vector3.one * voxelSize);
 
                     ++v;
                     ++i2;
@@ -50,11 +52,18 @@ public class Voxelizer : MonoBehaviour
                         i2=0;
                     }
                 }
-                
+
                 GameObject tmp = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 instanceMesh = tmp.GetComponent<MeshFilter>().sharedMesh;
-                defaultMaterial = Object.Instantiate( tmp.GetComponent<MeshRenderer>().sharedMaterial );
-                defaultMaterial.enableInstancing = true;
+
+                Renderer rndr = GetComponent<Renderer>();
+                if (rndr!=null) defaultMaterial = rndr.sharedMaterial;
+                if (defaultMaterial == null)
+                {
+                    defaultMaterial = Object.Instantiate( tmp.GetComponent<MeshRenderer>().sharedMaterial );
+                    defaultMaterial.enableInstancing = true;
+                }
+
                 Destroy(tmp);
             }
         }
@@ -83,6 +92,7 @@ public class Voxelizer : MonoBehaviour
         camera.backgroundColor = Color.black;
         camera.orthographic = true;
         camera.orthographicSize = Mathf.Max(voxelsCount.x, voxelsCount.y) * _voxelSize * 0.5f;
+        camera.allowMSAA = false;
 
         GameObject meshGO = new GameObject("Mesh2Voxelize");
         MeshFilter meshFilter = meshGO.AddComponent<MeshFilter>();
@@ -98,6 +108,8 @@ public class Voxelizer : MonoBehaviour
 
         meshGO.transform.parent = camera.transform;
         meshGO.transform.localPosition = Vector3.forward * ( voxelsCountF.z * _voxelSize * 0.5f + 1f );
+        meshGO.transform.localRotation = Quaternion.identity;
+        meshGO.transform.localScale = Vector3.one;
 
         camera.nearClipPlane = 0.9f;
         camera.farClipPlane = voxelsCountF.z * _voxelSize + 2f;
@@ -110,6 +122,7 @@ public class Voxelizer : MonoBehaviour
         backgroundQuad.GetComponent<Renderer>().sharedMaterial = material;
 
         RenderTexture renderTexture = new RenderTexture(voxelsCount.x, voxelsCount.y, 0, RenderTextureFormat.ARGB32);
+        renderTexture.antiAliasing = 1;
         Texture2D texture = new Texture2D(voxelsCount.x, voxelsCount.y, TextureFormat.ARGB32, false);
 
         camera.targetTexture = renderTexture;
@@ -166,12 +179,10 @@ public class Voxelizer : MonoBehaviour
                                             for (int z1=0 ; z1<3 ; ++z1)
                                                 isValidVoxel |= pixels[x1 + y1 * voxelsCount.x][z1] < 0.5f; // if any pixel around is "empty"
                                 }
-                            
 
-                            /*
-                            if (z == 9)
-                                Debug.DrawLine(new Vector3(x-.5f, y-.5f, z-1.5f) * _voxelSize - ( voxelsCountF - Vector3.one ) * _voxelSize * 0.5f, new Vector3(x+.5f, y+.5f, z-.5f) * _voxelSize - ( voxelsCountF - Vector3.one ) * _voxelSize * 0.5f, pixels[x + y * voxelsCount.x], 5f );
-                            */
+
+                            if ( debugBounds.Contains(new Vector3(x, y, z) ) )
+                                Debug.DrawRay( new Vector3(x-0.5f, y-0.5f, z-1.5f) * _voxelSize - ( voxelsCountF - Vector3.one ) * _voxelSize * 0.5f, Vector3.one * _voxelSize,  pixels[x + y * voxelsCount.x], 10f );
 
                             if (isValidVoxel)
                                 voxels.Add(new Vector3(x, y, z-1) * _voxelSize - ( voxelsCountF - Vector3.one ) * _voxelSize * 0.5f);

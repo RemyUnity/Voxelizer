@@ -260,7 +260,7 @@ GameObject:
   - component: {fileID: 954743664}
   - component: {fileID: 954743667}
   m_Layer: 0
-  m_Name: Capsule
+  m_Name: VoxelObject
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -281,7 +281,7 @@ MeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RenderingLayerMask: 4294967295
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: d8d783c3da952be4982a6543f6d9d542, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -307,7 +307,7 @@ MeshFilter:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 954743663}
-  m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 4300000, guid: dff23796fc184f7458fb3e700100f870, type: 3}
 --- !u!4 &954743666
 Transform:
   m_ObjectHideFlags: 0
@@ -333,8 +333,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mesh: {fileID: 0}
-  voxelSize: 0.01
+  voxelSize: 0.02
   keepInside: 0
+  debugBounds:
+    m_Center: {x: 20, y: 20, z: 5}
+    m_Extent: {x: 5, y: 5, z: 3}
 --- !u!1 &1037666722
 GameObject:
   m_ObjectHideFlags: 0
