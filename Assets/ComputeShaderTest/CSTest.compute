@@ -1,0 +1,105 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+
+Texture2D<float4> Shape;
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+float threshold;
+int channelOffset;
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	// TODO: insert actual code here!
+
+	//Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+
+	int width, height;
+	Shape.GetDimensions( width, height );
+
+	float4 o = float4(0,0,0,1);
+
+	bool isImageBorder = id.x == 0 || id.x == (width-1) || id.y == 0 || id.y == (height-1);
+
+	o.y = isImageBorder?1:0;
+
+	bool plain = Shape[id.xy].x > threshold;
+	o.z = plain?1:0;
+
+	if (isImageBorder && plain)
+	{
+		o.x = 1;
+	}
+	else
+	{
+		bool hasEmptyNeighbour = false;
+
+		for (int x = -1 ; x<=1 ; x++)
+		{
+			for (int y = -1 ; y<=1 ; y++)
+			{
+				for (int z = 0 ; z<= 2 ; z++)
+				{
+					int ix = clamp(id.x + x, 0, width-1);
+					int iy = clamp(id.y + y, 0, height-1);
+					int iz = fmod(z + channelOffset, 3);
+
+					hasEmptyNeighbour = hasEmptyNeighbour || !( Shape[int2(ix, iy)][iz] > threshold );
+				}
+			}
+		}
+
+		o.x = (plain && hasEmptyNeighbour)?1:0;
+	}
+
+	Result[id.xy] = o;
+}
+
+
+
+// Filter valid data.
+
+#pragma kernel CSFilter
+
+Texture2D<float> Voxels;
+RWTexture2D<float> Counter;
+RWTexture2D<float4> Coordinates;
+groupshared int index = 0;
+
+AppendStructuredBuffer<float3> AppendVoxelsBuffer;
+RWStructuredBuffer<float3> fixedVoxelsBuffer;
+
+[numthreads(64,1,1)]
+void CSFilter (uint3 id : SV_DispatchThreadID, uint group_id : SV_GroupIndex )
+{
+	int width, height;
+	Voxels.GetDimensions( width, height );
+
+	uint2 countIndex = uint2(0,0);
+
+	/*
+	if (Voxels[id.xy].x > 0)
+	{
+		float4 coords = float4( (float)id.x / width, (float)id.y / height ,0,1);
+		
+		AppendVoxelsBuffer.Append(  coords.xyz );
+
+		Coordinates[int2( Counter[countIndex] , id.y)] = coords;
+
+		int newIndex = index+1;
+
+		InterlockedAdd(index, 1);
+
+		InterlockedAdd( Counter[countIndex], 1);
+	}
+	*/
+
+	
+
+	//Counter[countIndex] = 1;
+	InterlockedAdd( Counter[countIndex], 1);
+}
