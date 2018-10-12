@@ -1,14 +1,67 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSMain
+#pragma kernel FilterVoxels
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-RWTexture2D<float4> Result;
+RWStructuredBuffer<float3> filteredVoxelsBuffer;
 
-[numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+Texture2D<float4> slices;
+
+float3 minP;
+float3 maxP;
+int sliceIndex;
+float zValue;
+bool keepInside;
+
+float2 textureSize;
+
+[numthreads(1,1,1)]
+void FilterVoxels (uint3 id : SV_DispatchThreadID)
 {
-	// TODO: insert actual code here!
-
-	Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+    uint t_Width;
+    uint t_Height;
+    
+    if ( id.x>(textureSize.x-1) || id.y>(textureSize.y-1) ) return;
+    
+    float4 colorValue = slices[ id.xy ];
+    if ( colorValue[sliceIndex] > 0.5 )
+    {
+        float3 pos = float3(0,0,0);
+        pos.x = lerp( (float) minP.x, (float) maxP.x, (float) id.x / (float) textureSize.x );
+        pos.y = lerp( (float) minP.y, (float) maxP.y, (float) id.y / (float) textureSize.y );
+        pos.z = zValue;
+        
+        bool validVoxel = false;
+        
+        if (keepInside) validVoxel = true;
+        else
+        {
+            validVoxel = validVoxel || colorValue[(sliceIndex+1)%3] < 0.5;
+            validVoxel = validVoxel || colorValue[(sliceIndex+2)%3] < 0.5;
+            if (id.x == 0 ) validVoxel = true;
+            else
+            {
+                validVoxel = validVoxel || slices[ uint2(id.x-1, id.y) ][sliceIndex] < 0.5;
+            }
+            if (id.y == 0 ) validVoxel = true;
+            else
+            {
+                validVoxel = validVoxel || slices[ uint2(id.x, id.y-1) ][sliceIndex] < 0.5;
+            }
+            if (id.x == (textureSize.x-1) ) validVoxel = true;
+            else
+            {
+                validVoxel = validVoxel || slices[ uint2(id.x+1, id.y) ][sliceIndex] < 0.5;
+            }
+            if (id.y == (textureSize.y-1) ) validVoxel = true;
+            else
+            {
+                validVoxel = validVoxel || slices[ uint2(id.x, id.y+1) ][sliceIndex] < 0.5;
+            }
+        }
+        
+        if (validVoxel)
+        {
+            uint counter = filteredVoxelsBuffer.IncrementCounter();
+            filteredVoxelsBuffer[counter] = pos;
+        }
+    }
 }
