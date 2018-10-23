@@ -45,6 +45,9 @@
         {
             Cull Front
 
+            ZWrite On
+            ZTest Less
+
             ColorMask [_ColorMask]
 
             CGPROGRAM
@@ -58,6 +61,9 @@
         Pass // ZERO Outside
         {
             Cull Back
+
+            ZWrite On
+            ZTest LEqual
 
             ColorMask [_ColorMask]
 
