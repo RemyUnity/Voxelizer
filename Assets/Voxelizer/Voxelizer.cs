@@ -96,14 +96,14 @@ namespace UnityEngine.Voxelizer
 			// Quad for the background.
 			Mesh quad = new Mesh();
 			quad.vertices = new Vector3[]{
-				new Vector3( bounds.min.x - 1f, bounds.min.y - 1f, bounds.min.z - 1f ),
-				new Vector3( bounds.max.x + 1f, bounds.min.y - 1f, bounds.min.z - 1f ),
-				new Vector3( bounds.max.x + 1f, bounds.max.y + 1f, bounds.min.z - 1f ),
-				new Vector3( bounds.min.x - 1f, bounds.max.y + 1f, bounds.min.z - 1f )
+				new Vector3( bounds.min.x - 1f, bounds.min.y - 1f, bounds.min.z + 1f ),
+				new Vector3( bounds.max.x + 1f, bounds.min.y - 1f, bounds.min.z + 1f ),
+				new Vector3( bounds.max.x + 1f, bounds.max.y + 1f, bounds.min.z + 1f ),
+				new Vector3( bounds.min.x - 1f, bounds.max.y + 1f, bounds.min.z + 1f )
 			};
 			quad.triangles = new int[]{
-				0,1,2,
-				2,3,0
+				0,2,1,
+				2,0,3
 			};
 			quad.RecalculateBounds();
 			quad.RecalculateNormals();
@@ -154,10 +154,29 @@ namespace UnityEngine.Voxelizer
 				cmd.ClearRenderTarget(true, true, Color.black, 1.0f);
 				cmd.DrawMesh(quad, Matrix4x4.identity, material);
 				cmd.DrawMesh(mesh, Matrix4x4.identity, material);
+				cmd.DrawMesh(mesh, Matrix4x4.identity, material);
 
 				camera.AddCommandBuffer( CameraEvent.AfterEverything, cmd);
 				
 				camera.Render();
+
+#if UNITY_EDITOR
+				if (z == 5 )
+				{
+					string textureOutput = System.IO.Path.Combine(Application.dataPath, "debug.png");
+					RenderTexture previous = RenderTexture.active;
+					RenderTexture.active = renderTexture;
+					camera.Render();
+					Texture2D tex = new Texture2D(renderTexture.width, renderTexture.height );
+					tex.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
+					RenderTexture.active = previous;
+					tex.Apply();
+					var bytes = ImageConversion.EncodeToPNG(tex);
+					
+					System.IO.File.WriteAllBytes(textureOutput, bytes);
+					AssetDatabase.Refresh();
+				}
+#endif
 				
 				computeShader.SetInt("sliceIndex", colorMask);
 				computeShader.SetFloat("zValue", Mathf.Lerp(voxelBounds.min.z, voxelBounds.max.z, (float)z / m_voxelsCount.z) );
