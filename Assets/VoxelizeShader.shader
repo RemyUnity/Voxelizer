@@ -44,9 +44,9 @@
         Pass // ONE Inside
         {
             Cull Front
-
+            
             ZWrite On
-            ZTest Less
+            ZTest LEqual
 
             ColorMask [_ColorMask]
 
@@ -61,7 +61,7 @@
         Pass // ZERO Outside
         {
             Cull Back
-
+            
             ZWrite On
             ZTest LEqual
 

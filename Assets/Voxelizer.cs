@@ -34,6 +34,7 @@ public class Voxelizer : MonoBehaviour
         voxelizer = new UnityEngine.Voxelizer.Voxelizer();
         voxelizer.mesh = mesh;
         voxelizer.voxelsSize = voxelSize;
+        voxelizer.keepInside = keepInside;
 
         voxelizer.finishedCallback += BuildMatrices;
 

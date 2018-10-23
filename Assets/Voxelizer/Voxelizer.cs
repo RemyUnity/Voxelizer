@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿#define DEBUG
+
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -91,15 +93,15 @@ namespace UnityEngine.Voxelizer
 			camera.allowMSAA = false;
 
 			camera.nearClipPlane = 0.9f;
-			camera.farClipPlane = bounds.extents.z * 2 + 2f;
+			camera.farClipPlane = bounds.extents.z * 2f + 3f;
 
 			// Quad for the background.
 			Mesh quad = new Mesh();
 			quad.vertices = new Vector3[]{
-				new Vector3( bounds.min.x - 1f, bounds.min.y - 1f, bounds.min.z + 1f ),
-				new Vector3( bounds.max.x + 1f, bounds.min.y - 1f, bounds.min.z + 1f ),
-				new Vector3( bounds.max.x + 1f, bounds.max.y + 1f, bounds.min.z + 1f ),
-				new Vector3( bounds.min.x - 1f, bounds.max.y + 1f, bounds.min.z + 1f )
+				new Vector3( bounds.min.x - 1f, bounds.min.y - 1f, bounds.max.z +1),
+				new Vector3( bounds.max.x + 1f, bounds.min.y - 1f, bounds.max.z +1),
+				new Vector3( bounds.max.x + 1f, bounds.max.y + 1f, bounds.max.z +1),
+				new Vector3( bounds.min.x - 1f, bounds.max.y + 1f, bounds.max.z +1)
 			};
 			quad.triangles = new int[]{
 				0,2,1,
@@ -109,7 +111,15 @@ namespace UnityEngine.Voxelizer
 			quad.RecalculateNormals();
 
 			// Render texture to render the slices.
-			RenderTexture renderTexture = new RenderTexture(m_voxelsCount.x, m_voxelsCount.y, 0, RenderTextureFormat.ARGB32);
+			RenderTextureDescriptor rtDesc = new RenderTextureDescriptor();
+			rtDesc.width = m_voxelsCount.x;
+			rtDesc.height = m_voxelsCount.y;
+			rtDesc.depthBufferBits = 32;
+			rtDesc.colorFormat = RenderTextureFormat.ARGB32;
+			rtDesc.volumeDepth = 1;
+			rtDesc.msaaSamples = 1;
+			rtDesc.dimension = TextureDimension.Tex2D;
+			RenderTexture renderTexture = new RenderTexture(rtDesc);
 			renderTexture.antiAliasing = 1;
 
 			camera.targetTexture = renderTexture;
@@ -144,75 +154,81 @@ namespace UnityEngine.Voxelizer
 			cmd.name = "Draw Slices";
 
 			int prevColorMask = 0;
-			for (int z = 0; z <= m_voxelsCount.z; ++z)
+			for (int z = 0; z <= m_voxelsCount.z+2; ++z)
 			{
 				camera.nearClipPlane = 1f + (z + 0.5f) * voxelsSize;
 
 				camera.RemoveAllCommandBuffers();
 
 				cmd.Clear();
-				cmd.ClearRenderTarget(true, true, Color.black, 1.0f);
-				cmd.DrawMesh(quad, Matrix4x4.identity, material);
-				cmd.DrawMesh(mesh, Matrix4x4.identity, material);
-				cmd.DrawMesh(mesh, Matrix4x4.identity, material);
+				cmd.ClearRenderTarget(true, false, Color.black, 1.0f);
+				cmd.DrawMesh(quad, Matrix4x4.identity, material, 0, 1);
+				//cmd.DrawMesh(mesh, Matrix4x4.identity, material);
+				
+				for(var i=0 ; i<mesh.subMeshCount ; ++i)
+					cmd.DrawMesh(mesh, Matrix4x4.identity, material, i, 0);
+				for(var i=0 ; i<mesh.subMeshCount ; ++i)
+					cmd.DrawMesh(mesh, Matrix4x4.identity, material, 1, 1);
 
 				camera.AddCommandBuffer( CameraEvent.AfterEverything, cmd);
 				
 				camera.Render();
 
-#if UNITY_EDITOR
-				if (z == 5 )
-				{
-					string textureOutput = System.IO.Path.Combine(Application.dataPath, "debug.png");
-					RenderTexture previous = RenderTexture.active;
-					RenderTexture.active = renderTexture;
-					camera.Render();
-					Texture2D tex = new Texture2D(renderTexture.width, renderTexture.height );
-					tex.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
-					RenderTexture.active = previous;
-					tex.Apply();
-					var bytes = ImageConversion.EncodeToPNG(tex);
-					
-					System.IO.File.WriteAllBytes(textureOutput, bytes);
-					AssetDatabase.Refresh();
-				}
+#if UNITY_EDITOR && DEBUG
+				string textureOutput = System.IO.Path.Combine(Application.dataPath, "Debug/debug_"+z+".png");
+				RenderTexture previous = RenderTexture.active;
+				RenderTexture.active = renderTexture;
+				camera.Render();
+				Texture2D tex = new Texture2D(renderTexture.width, renderTexture.height );
+				tex.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
+				RenderTexture.active = previous;
+				tex.Apply();
+				var bytes = ImageConversion.EncodeToPNG(tex);
+				
+				System.IO.File.WriteAllBytes(textureOutput, bytes);
 #endif
-				
-				computeShader.SetInt("sliceIndex", colorMask);
-				computeShader.SetFloat("zValue", Mathf.Lerp(voxelBounds.min.z, voxelBounds.max.z, (float)z / m_voxelsCount.z) );
-				
-				filteredm_voxelsBuffer.SetData(zeroData );
-				filteredm_voxelsBuffer.SetCounterValue(0);
-				
-				computeShader.Dispatch(kernelIndex, threadGroups.x, threadGroups.y, 1);
-				
-				var readbackRequest = AsyncGPUReadback.Request(filteredm_voxelsBuffer);
-				while (!readbackRequest.done)
-				{
-					yield return null;
-				}
-				
-				// Copy the count.
-				ComputeBuffer.CopyCount(filteredm_voxelsBuffer, countBuffer, 0);
-				// Retrieve it into array.
-				countBuffer.GetData(counter);
 
-				filteredm_voxels = readbackRequest.GetData<Vector3>().ToArray();
-				
-				//filteredm_voxelsBuffer.GetData(filteredm_voxels);
-				
-				System.Array.Resize(ref filteredm_voxels, counter[0]);
-				
-				//Debug.Log( filteredm_voxels.Aggregate("Data ("+filteredm_voxels.Length+"): ", (s, v) => s += v.ToString() ) );
-				
-				m_voxels.AddRange(filteredm_voxels);
+				if (z > 0)
+				{
+					computeShader.SetInt("sliceIndex", prevColorMask );
+					computeShader.SetFloat("zValue", Mathf.Lerp(voxelBounds.min.z, voxelBounds.max.z, (float)z / m_voxelsCount.z));
+
+					filteredm_voxelsBuffer.SetData(zeroData);
+					filteredm_voxelsBuffer.SetCounterValue(0);
+
+					computeShader.Dispatch(kernelIndex, threadGroups.x, threadGroups.y, 1);
+
+					var readbackRequest = AsyncGPUReadback.Request(filteredm_voxelsBuffer);
+					while (!readbackRequest.done)
+					{
+						yield return null;
+					}
+
+					// Copy the count.
+					ComputeBuffer.CopyCount(filteredm_voxelsBuffer, countBuffer, 0);
+
+					// Retrieve it into array.
+					countBuffer.GetData(counter);
+
+					filteredm_voxels = readbackRequest.GetData<Vector3>().ToArray();
+
+					//filteredm_voxelsBuffer.GetData(filteredm_voxels);
+
+					System.Array.Resize(ref filteredm_voxels, counter[0]);
+
+					//Debug.Log( filteredm_voxels.Aggregate("Data ("+filteredm_voxels.Length+"): ", (s, v) => s += v.ToString() ) );
+
+					m_voxels.AddRange(filteredm_voxels);
+				}
 
 				prevColorMask = colorMask;
-				colorMask = (colorMask+1)%3;
-				material.SetInt("_ColorMask", 1 + ( 1 << ( 3 - colorMask ) ) );
-
-				//Debug.Log("ColorMask: "+material.GetInt("_ColorMask"));
+				colorMask = (colorMask + 1) % 3;
+				material.SetInt("_ColorMask", 1 + (1 << (3 - colorMask)));
 			}
+			
+#if UNITY_EDITOR && DEBUG
+			AssetDatabase.Refresh();
+#endif
 
 			countBuffer.Dispose();
 			filteredm_voxelsBuffer.Dispose();
