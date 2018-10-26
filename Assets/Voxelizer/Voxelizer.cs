@@ -38,6 +38,9 @@ namespace UnityEngine.Voxelizer
 
 		public IEnumerator Voxelize()
 		{
+			var previousRP = GraphicsSettings.renderPipelineAsset;
+			GraphicsSettings.renderPipelineAsset = null;
+		
 #if UNITY_EDITOR
 			string csPath = System.IO.Path.Combine( "Assets", "VoxelizeCS.compute");
 
@@ -155,7 +158,11 @@ namespace UnityEngine.Voxelizer
 
 			int prevColorMask = 0;
 			for (int z = 0; z <= m_voxelsCount.z+2; ++z)
-			{
+			{			
+#if UNITY_EDITOR
+				EditorUtility.DisplayProgressBar("Voxelization", "", (float)z / (m_voxelsCount.z+2f) );
+#endif
+				
 				camera.nearClipPlane = 1f + (z + 0.5f) * voxelsSize;
 
 				camera.RemoveAllCommandBuffers();
@@ -168,7 +175,7 @@ namespace UnityEngine.Voxelizer
 				for(var i=0 ; i<mesh.subMeshCount ; ++i)
 					cmd.DrawMesh(mesh, Matrix4x4.identity, material, i, 0);
 				for(var i=0 ; i<mesh.subMeshCount ; ++i)
-					cmd.DrawMesh(mesh, Matrix4x4.identity, material, 1, 1);
+					cmd.DrawMesh(mesh, Matrix4x4.identity, material, i, 1);
 
 				camera.AddCommandBuffer( CameraEvent.AfterEverything, cmd);
 				
@@ -201,6 +208,7 @@ namespace UnityEngine.Voxelizer
 					var readbackRequest = AsyncGPUReadback.Request(filteredm_voxelsBuffer);
 					while (!readbackRequest.done)
 					{
+						readbackRequest.Update();
 						yield return null;
 					}
 
@@ -225,6 +233,10 @@ namespace UnityEngine.Voxelizer
 				colorMask = (colorMask + 1) % 3;
 				material.SetInt("_ColorMask", 1 + (1 << (3 - colorMask)));
 			}
+					
+#if UNITY_EDITOR
+			EditorUtility.ClearProgressBar();
+#endif
 			
 #if UNITY_EDITOR && DEBUG
 			AssetDatabase.Refresh();
@@ -233,15 +245,36 @@ namespace UnityEngine.Voxelizer
 			countBuffer.Dispose();
 			filteredm_voxelsBuffer.Dispose();
 			cmd.Dispose();
+			
+			
+					
+#if UNITY_EDITOR
+			EditorUtility.ClearProgressBar();
 
+			if (!Application.isPlaying)
+			{
+				Object.DestroyImmediate(camera.gameObject);
+				Object.DestroyImmediate(renderTexture);
+				Object.DestroyImmediate(material);
+			}
+			else
+			{
+				Object.Destroy(camera.gameObject);
+				Object.Destroy(renderTexture);
+				Object.Destroy(material);
+			}
+#else
 			Object.Destroy(camera.gameObject);
 			Object.Destroy(renderTexture);
 			Object.Destroy(material);
+#endif
 
 			time = Time.realtimeSinceStartup - time;
 			Debug.Log("Generated "+m_voxels.Count+" m_voxels in "+time+" seconds.");
 
 			m_processing = false;
+
+			GraphicsSettings.renderPipelineAsset = previousRP;
 			
 			if (finishedCallback != null ) finishedCallback();
 		}
